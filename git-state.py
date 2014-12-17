@@ -12,6 +12,7 @@ import subprocess
 import traceback
 import logging
 import logging.handlers
+import argparse
 
 __app__ = os.path.basename(__file__)
 __author__ = "Gus Esquivel"
@@ -20,7 +21,7 @@ __credits__ = ["Gus Esquivel"]
 __license__ = "GPL"
 __version__ = "0.1"
 __maintainer__ = "Gus Esquivel"
-__email__ = "gesquive@gmail.com"
+__email__ = "gesquive@gmail"
 __status__ = "Beta"
 
 
@@ -34,66 +35,33 @@ debug = False
 
 logger = logging.getLogger(__app__)
 
-def usage():
-    usage = \
-"""Usage: %s [options] forced_arg
-    Git utility to show the state of all subfolder git repositories
-Options and arguments:
-  -h --help                         Prints this message.
-  -v --verbose                      Writes all messages to console.
-
-    v%s
-""" % (__app__, __version__)
-
-    print usage
-
-
 def main():
     global verbose, debug
 
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "hv", \
-        ["help", "verbose", "debug"])
-    except getopt.GetoptError, err:
-        print str(err)
-        print usage()
-        sys.exit(2)
+    parser = argparse.ArgumentParser(add_help=False,
+        description="Git utility to show the state of all subfolder git repositories",
+        epilog="%(__app__)s v%(__version__)s\n" % globals())
 
-    verbose = False
-    debug = False
-    forced_arg = None
+    group = parser.add_argument_group("Options")
+    group.add_argument("-d", "--dir", default=".",
+        help="The parent directory to the git repositories.")
+    group.add_argument("-h", "--help", action="help",
+        help="Show this help message and exit.")
+    group.add_argument("-v", "--verbose", action="store_true", dest="verbose",
+        help="Writes all messages to console.")
+    group.add_argument("-D", "--debug", action="store_true", dest="debug",
+        help=argparse.SUPPRESS)
+    group.add_argument("-V", "--version", action="version",
+                    version="%(__app__)s v%(__version__)s" % globals())
 
-    # Save forced arg
-    if len(args) > 0:
-        forced_arg = args[0]
-    elif len(args) > 1:
-        usage()
-        sys.exit(2)
+    args = parser.parse_args()
+    verbose = args.verbose
+    debug = args.debug
 
-    for o, a in opts:
-        if o in ("-h", "--help"):
-            # Print out help and exit
-            usage()
-            sys.exit()
-        elif o in ("-dd", "--debug"):
-            debug = True
-        elif o in ("-v", "--verbose"):
-            verbose = True
-
-    log_file = LOG_FILE
-    if not os.access(log_file, os.W_OK):
-        print "Cannot write to '%(log_file)s'.\nExiting." % locals()
-        sys.exit(2)
-    file_handler = logging.handlers.RotatingFileHandler(log_file,
-                                            maxBytes=LOG_SIZE, backupCount=9)
-    file_formater = logging.Formatter('%(asctime)s,%(levelname)s,%(thread)d,%(message)s')
-    file_handler.setFormatter(file_formater)
-    logger.addHandler(file_handler)
-
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_formatter = logging.Formatter("[%(asctime)s] %(levelname)-5.5s: %(message)s")
+    console_handler.setFormatter(console_formatter)
     if verbose:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_formatter = logging.Formatter("[%(asctime)s] %(levelname)-5.5s: %(message)s")
-        console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
 
     logger.setLevel(logging.DEBUG)
