@@ -83,8 +83,11 @@ def main():
         git_dirs = get_get_dirs(args.dir)
         if len(git_dirs) == 0:
             logger.error("None of the subdirectories have git repositories.")
+        git_data = ["Scanning subdirectories of '{}'".format(os.path.abspath(args.dir))]
         for git_dir in git_dirs:
-            print_git_status(git_dir)
+            git_status = get_repo_info(git_dir)
+            git_data.append(git_status)
+        output_to_pager(git_data)
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception:
@@ -104,29 +107,38 @@ def get_get_dirs(parent_dir):
 
 branch_regex = re.compile(r'.*On branch (?P<branch>.*)')
 
-def print_git_status(git_dir):
+
+def get_repo_info(git_dir):
     saved_cwd = os.getcwd()
-    # print("Checking for status in {}".format(git_dir))
     git_dir = os.path.abspath(git_dir)
     os.chdir(git_dir)
     status_out = popen("git status")
-    # print (status_out)
 
-    # start = status_out.find("On branch")
-    # end = status_out.find('\n', start)
-    # branch = status_out
     results = re.match(branch_regex, status_out)
     if results:
         (branch_name,) = results.groups(0)
+    branch_color = colors.YELLOW
+    if branch_name == "master":
+        branch_color = colors.GREEN
 
-    git_status = "Changes"
+    git_status = "changes"
+    status_color = colors.RED
     if status_out.find('nothing to commit') != -1:
-        git_status = "No Changes"
+        git_status = "no changes"
+        status_color = colors.GREEN
 
     pretty_git_name = os.path.basename(git_dir)
-    print("{} {} {}".format(pretty_git_name, branch_name, git_status))
+    if len(pretty_git_name) > 50:
+        pretty_git_name = "{}...".format(pretty_git_name[:47])
+
+    status_line = "{}{:<50}{} {}{:>14}{} : {}{:<10}{}".format(
+        colors.BLUE, pretty_git_name, colors.END,
+        branch_color, branch_name, colors.END,
+        status_color, git_status, colors.END)
 
     os.chdir(saved_cwd)
+
+    return status_line
 
 
 def popen(command, cwd=None, seperate=True):
@@ -148,7 +160,7 @@ def output_to_pager(text):
                                  stdin=subprocess.PIPE,
                                  stdout=sys.stdout)
         for line in text:
-            pager.write(line)
+            pager.stdin.write("{}{}".format(line, os.linesep))
         pager.stdin.close()
         pager.wait()
     except KeyboardInterrupt:
