@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-# git-state.py
+# git-substatus.py
 # GusE 2014.12.16 V0.1
 """
-Git utility to show the state of all subfolder git repositories
+Git utility to show the status of all subfolder git repositories
 """
 
 from __future__ import print_function
@@ -38,6 +38,10 @@ debug = False
 
 logger = logging.getLogger(__app__)
 
+#TODO: Fix logging
+#TODO: Add auto-detection of color tty
+#TODO: Add auto-update feature
+#TODO: Add support for current directory
 
 class colors:
     PRE = '\033[95m'
@@ -52,7 +56,7 @@ def main():
     global verbose, debug
 
     parser = argparse.ArgumentParser(add_help=False,
-        description="Git utility to show the state of all subfolder git repositories",
+        description="Git utility to show the status of all subfolder git repositories",
         epilog="%(__app__)s v%(__version__)s\n" % globals())
 
     group = parser.add_argument_group("Options")
