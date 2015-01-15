@@ -36,8 +36,6 @@ LOG_SIZE = 1024*1024*200
 verbose = False
 debug = False
 
-logger = logging.getLogger(__app__)
-
 #TODO: Fix logging
 #TODO: Add auto-detection of color tty
 #TODO: Add auto-update feature
@@ -76,17 +74,17 @@ def main():
     debug = args.debug
 
     console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter("[%(asctime)s] %(levelname)-5.5s: %(message)s")
+    console_formatter = logging.Formatter("[%(asctime)s] %(levelname)-5.5s: "
+                                          "%(message)s", "%Y-%m-%d %H:%M:%S")
     console_handler.setFormatter(console_formatter)
+    logging.getLogger('').addHandler(console_handler)
     if verbose:
-        logger.addHandler(console_handler)
-
-    logger.setLevel(logging.DEBUG)
+        logging.getLogger('').setLevel(logging.DEBUG)
 
     try:
         git_dirs = get_get_dirs(args.dir)
         if len(git_dirs) == 0:
-            logger.error("None of the subdirectories have git repositories.")
+            logging.error("None of the subdirectories have git repositories.")
         git_data = ["Scanning subdirectories of '{}'".format(os.path.abspath(args.dir))]
         for git_dir in git_dirs:
             git_status = get_repo_info(git_dir)
