@@ -3,7 +3,7 @@
 List the short status of all subdirectory git repositories.
 
 ```
-usage: git-substatus.py [-d DIR] [-h] [-v] [-V]
+usage: git-substatus.py [-d DIR] [-h] [-v] [-u] [-V]
 
 Git utility to show the status of all subfolder git repositories
 
@@ -11,6 +11,8 @@ Options:
   -d DIR, --dir DIR  The parent directory to the git repositories.
   -h, --help         Show this help message and exit.
   -v, --verbose      Writes all messages to console.
+  -u, --update       Checks server for an update, replaces the current version
+                     if there is a newer version available.
   -V, --version      show program's version number and exit
   ```
 
@@ -27,4 +29,3 @@ Keep in mind, if you want to be able to run the script as a git sub-command (ie.
 ### TODO
  - Show a status printout in case script is called within a git directory
  - Add auto-detection of a color tty and adjust printout accordingly
- - Add auto-update feature

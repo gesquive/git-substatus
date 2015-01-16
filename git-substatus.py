@@ -4,8 +4,8 @@
 """
 Git utility to show the status of all subfolder git repositories
 """
-
 from __future__ import print_function
+__version__ = "1.0"
 
 import getopt
 import sys
@@ -22,23 +22,17 @@ __author__ = "Gus Esquivel"
 __copyright__ = "Copyright 2014"
 __credits__ = ["Gus Esquivel"]
 __license__ = "GPL"
-__version__ = "0.1"
 __maintainer__ = "Gus Esquivel"
 __email__ = "gesquive@gmail"
-__status__ = "Beta"
+__status__ = "Production"
 
-
-#--------------------------------------
-# Configurable Constants
-LOG_FILE = '/var/log/' + os.path.splitext(__app__)[0] + '.log'
-LOG_SIZE = 1024*1024*200
+script_www = 'https://github.com/gesquive/git-substatus'
+script_url = 'https://raw.github.com/gesquive/git-substatus/master/git-substatus.py'
 
 verbose = False
 debug = False
 
-#TODO: Fix logging
 #TODO: Add auto-detection of color tty
-#TODO: Add auto-update feature
 #TODO: Add support for current directory
 
 class colors:
@@ -66,6 +60,9 @@ def main():
         help="Writes all messages to console.")
     group.add_argument("-D", "--debug", action="store_true", dest="debug",
         help=argparse.SUPPRESS)
+    group.add_argument("-u", "--update", action="store_true", dest="update",
+        help="Checks server for an update, replaces the current version if "\
+        "there is a newer version available.")
     group.add_argument("-V", "--version", action="version",
                     version="%(__app__)s v%(__version__)s" % globals())
 
@@ -73,13 +70,19 @@ def main():
     verbose = args.verbose
     debug = args.debug
 
+    if args.update:
+        update(script_url)
+        sys.exit()
+
     console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter("[%(asctime)s] %(levelname)-5.5s: "
-                                          "%(message)s", "%Y-%m-%d %H:%M:%S")
+    console_formatter = logging.Formatter("%(message)s",
+                                          "%Y-%m-%d %H:%M:%S")
     console_handler.setFormatter(console_formatter)
     logging.getLogger('').addHandler(console_handler)
     if verbose:
         logging.getLogger('').setLevel(logging.DEBUG)
+    else:
+        logging.getLogger('').setLevel(logging.INFO)
 
     try:
         git_dirs = get_get_dirs(args.dir)
@@ -93,7 +96,7 @@ def main():
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception:
-        print(traceback.format_exc())
+        logging.exception("Fatal error")
 
 
 from glob import glob
@@ -168,6 +171,147 @@ def output_to_pager(text):
     except KeyboardInterrupt:
         pass
         # let less handle this, -K will exit cleanly
+
+
+def update(dl_url, force_update=False):
+    """
+Attempts to download the update url in order to find if an update is needed.
+If an update is needed, the current script is backed up and the update is
+saved in its place.
+"""
+    import urllib
+    import re
+    from subprocess import call
+    def compare_versions(vA, vB):
+        """
+Compares two version number strings
+@param vA: first version string to compare
+@param vB: second version string to compare
+@author <a href="http_stream://sebthom.de/136-comparing-version-numbers-in-jython-pytho/">Sebastian Thomschke</a>
+@return negative if vA < vB, zero if vA == vB, positive if vA > vB.
+"""
+        if vA == vB: return 0
+
+        def num(s):
+            if s.isdigit(): return int(s)
+            return s
+
+        seqA = map(num, re.findall('\d+|\w+', vA.replace('-SNAPSHOT', '')))
+        seqB = map(num, re.findall('\d+|\w+', vB.replace('-SNAPSHOT', '')))
+
+        # this is to ensure that 1.0 == 1.0.0 in cmp(..)
+        lenA, lenB = len(seqA), len(seqB)
+        for i in range(lenA, lenB): seqA += (0,)
+        for i in range(lenB, lenA): seqB += (0,)
+
+        rc = cmp(seqA, seqB)
+
+        if rc == 0:
+            if vA.endswith('-SNAPSHOT'): return -1
+            if vB.endswith('-SNAPSHOT'): return 1
+        return rc
+
+    # dl the first 256 bytes and parse it for version number
+    try:
+        http_stream = urllib.urlopen(dl_url)
+        update_file = http_stream.read(256)
+        http_stream.close()
+    except IOError, (errno, strerror):
+        logging.exception("Unable to retrieve version data")
+        return
+
+    match_regex = re.search(r'__version__ *= *"(\S+)"', update_file)
+    if not match_regex:
+        logging.error("No version info could be found")
+        return
+    update_version = match_regex.group(1)
+
+    if not update_version:
+        logging.error("Unable to parse version data")
+        return
+
+    if force_update:
+        logging.info("Forcing update, downloading version %s..." \
+                        % update_version)
+    else:
+        cmp_result = compare_versions(__version__, update_version)
+        if cmp_result < 0:
+            logging.info("Newer version %s available, downloading..."
+                            % update_version)
+        elif cmp_result > 0:
+            logging.info("Local version %s newer then available %s, "
+                            "not updating." % (__version__, update_version))
+            return
+        else:
+            logging.info("You already have the latest version.")
+            return
+
+    # dl, backup, and save the updated script
+    app_path = os.path.realpath(sys.argv[0])
+
+    if not os.access(app_path, os.W_OK):
+        logging.error("Cannot update -- unable to write to %s" % app_path)
+
+    dl_path = app_path + ".new"
+    backup_path = app_path + ".old"
+    try:
+        dl_file = open(dl_path, 'w')
+        http_stream = urllib.urlopen(dl_url)
+        total_size = None
+        bytes_so_far = 0
+        chunk_size = 8192
+        try:
+            total_size = int(http_stream.info().getheader('Content-Length').strip())
+        except:
+            # The header is improper or missing Content-Length, just download
+            dl_file.write(http_stream.read())
+
+        while total_size:
+            chunk = http_stream.read(chunk_size)
+            dl_file.write(chunk)
+            bytes_so_far += len(chunk)
+
+            if not chunk:
+                break
+
+            percent = float(bytes_so_far) / total_size
+            percent = round(percent*100, 2)
+            sys.stdout.write("Downloaded %d of %d bytes (%0.2f%%)\r" %
+                (bytes_so_far, total_size, percent))
+
+            if bytes_so_far >= total_size:
+                sys.stdout.write('\n')
+
+        http_stream.close()
+        dl_file.close()
+    except IOError, (errno, strerror):
+        logging.exception("Download failed")
+        return
+
+    try:
+        os.rename(app_path, backup_path)
+    except OSError, (errno, strerror):
+        logging.exception()("Unable to rename %s to %s: (%d) %s" \
+                    % (app_path, backup_path, errno, strerror))
+        return
+
+    try:
+        os.rename(dl_path, app_path)
+    except OSError, (errno, strerror):
+        logging.exception()("Unable to rename %s to %s: (%d) %s" \
+                    % (dl_path, app_path, errno, strerror))
+        return
+
+    try:
+        import shutil
+        shutil.copymode(backup_path, app_path)
+    except:
+        os.chmod(app_path, 0755)
+
+    logging.info("New version installed as %s" % app_path)
+    logging.info("(previous version backed up to %s)" % (backup_path))
+    return
+
 
 if __name__ == '__main__':
     main()
