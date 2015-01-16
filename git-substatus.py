@@ -5,7 +5,7 @@
 Git utility to show the status of all subfolder git repositories
 """
 from __future__ import print_function
-__version__ = "1.0"
+__version__ = "1.1"
 
 import getopt
 import sys
@@ -70,10 +70,6 @@ def main():
     verbose = args.verbose
     debug = args.debug
 
-    if args.update:
-        update(script_url)
-        sys.exit()
-
     console_handler = logging.StreamHandler(sys.stdout)
     console_formatter = logging.Formatter("%(message)s",
                                           "%Y-%m-%d %H:%M:%S")
@@ -83,6 +79,10 @@ def main():
         logging.getLogger('').setLevel(logging.DEBUG)
     else:
         logging.getLogger('').setLevel(logging.INFO)
+
+    if args.update:
+        update(script_url)
+        sys.exit()
 
     try:
         git_dirs = get_get_dirs(args.dir)
@@ -213,6 +213,7 @@ Compares two version number strings
 
     # dl the first 256 bytes and parse it for version number
     try:
+        logging.info("Checking the latest version...")
         http_stream = urllib.urlopen(dl_url)
         update_file = http_stream.read(256)
         http_stream.close()
@@ -231,16 +232,16 @@ Compares two version number strings
         return
 
     if force_update:
-        logging.info("Forcing update, downloading version %s..." \
-                        % update_version)
+        logging.info("Forcing update, downloading version {}..."
+                     "".format(update_version))
     else:
         cmp_result = compare_versions(__version__, update_version)
         if cmp_result < 0:
-            logging.info("Newer version %s available, downloading..."
-                            % update_version)
+            logging.info("Newer version ({}) available, downloading..."
+                         "".format(update_version))
         elif cmp_result > 0:
-            logging.info("Local version %s newer then available %s, "
-                            "not updating." % (__version__, update_version))
+            logging.info("Local version ({}) is newer then available ({}), "
+                         "not updating.".format(__version__, update_version))
             return
         else:
             logging.info("You already have the latest version.")
@@ -250,7 +251,7 @@ Compares two version number strings
     app_path = os.path.realpath(sys.argv[0])
 
     if not os.access(app_path, os.W_OK):
-        logging.error("Cannot update -- unable to write to %s" % app_path)
+        logging.error("Cannot update -- unable to write to {}".format(app_path))
 
     dl_path = app_path + ".new"
     backup_path = app_path + ".old"
@@ -276,8 +277,8 @@ Compares two version number strings
 
             percent = float(bytes_so_far) / total_size
             percent = round(percent*100, 2)
-            sys.stdout.write("Downloaded %d of %d bytes (%0.2f%%)\r" %
-                (bytes_so_far, total_size, percent))
+            sys.stdout.write("Downloaded {} of {} bytes ({:0.2f})\r"
+                             "".format(bytes_so_far, total_size, percent))
 
             if bytes_so_far >= total_size:
                 sys.stdout.write('\n')
@@ -291,25 +292,26 @@ Compares two version number strings
     try:
         os.rename(app_path, backup_path)
     except OSError, (errno, strerror):
-        logging.exception()("Unable to rename %s to %s: (%d) %s" \
-                    % (app_path, backup_path, errno, strerror))
+        logging.exception()("Unable to rename {} to {}: ({}) {}"
+                            "".format(app_path, backup_path, errno, strerror))
         return
 
     try:
         os.rename(dl_path, app_path)
     except OSError, (errno, strerror):
-        logging.exception()("Unable to rename %s to %s: (%d) %s" \
-                    % (dl_path, app_path, errno, strerror))
+        logging.exception("Unable to rename {} to {}: ({}) {}"
+                          "".format(dl_path, app_path, errno, strerror))
         return
 
     try:
         import shutil
         shutil.copymode(backup_path, app_path)
     except:
+        pass
         os.chmod(app_path, 0755)
 
-    logging.info("New version installed as %s" % app_path)
-    logging.info("(previous version backed up to %s)" % (backup_path))
+    logging.info("New version installed as {}".format(app_path))
+    logging.info("(previous version backed up to {})".format(backup_path))
     return
 
 
