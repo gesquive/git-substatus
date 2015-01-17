@@ -5,7 +5,7 @@
 Git utility to show the status of all subfolder git repositories
 """
 from __future__ import print_function
-__version__ = "1.1"
+__version__ = "1.2"
 
 import getopt
 import sys
@@ -54,6 +54,8 @@ def main():
     group = parser.add_argument_group("Options")
     group.add_argument("-d", "--dir", default=".",
         help="The parent directory to the git repositories.")
+    group.add_argument("-R", "--reverse-sort", action="store_true",
+        help="Reverse the order of the listed repositories.")
     group.add_argument("-h", "--help", action="help",
         help="Show this help message and exit.")
     group.add_argument("-v", "--verbose", action="store_true", dest="verbose",
@@ -85,7 +87,7 @@ def main():
         sys.exit()
 
     try:
-        git_dirs = get_get_dirs(args.dir)
+        git_dirs = get_get_dirs(args.dir, args.reverse_sort)
         if len(git_dirs) == 0:
             logging.error("None of the subdirectories have git repositories.")
         git_data = ["Scanning subdirectories of '{}'".format(os.path.abspath(args.dir))]
@@ -102,12 +104,13 @@ def main():
 from glob import glob
 
 
-def get_get_dirs(parent_dir):
+def get_get_dirs(parent_dir, reverse=False):
     git_dirs = []
     for sub_file in glob(os.path.join(parent_dir, '*')):
         if os.path.exists(os.path.join(sub_file, ".git")):
             git_dirs.append(sub_file)
-    return git_dirs
+    return sorted(git_dirs, reverse=reverse,
+        key=lambda s: s.lower())
 
 
 branch_regex = re.compile(r'.*On branch (?P<branch>.*)')

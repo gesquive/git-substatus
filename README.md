@@ -3,18 +3,19 @@
 List the short status of all subdirectory git repositories.
 
 ```
-usage: git-substatus.py [-d DIR] [-h] [-v] [-u] [-V]
+usage: git-substatus [-d DIR] [-R] [-h] [-v] [-u] [-V]
 
 Git utility to show the status of all subfolder git repositories
 
 Options:
-  -d DIR, --dir DIR  The parent directory to the git repositories.
-  -h, --help         Show this help message and exit.
-  -v, --verbose      Writes all messages to console.
-  -u, --update       Checks server for an update, replaces the current version
-                     if there is a newer version available.
-  -V, --version      show program's version number and exit
-  ```
+  -d DIR, --dir DIR   The parent directory to the git repositories.
+  -R, --reverse-sort  Reverse the order of the listed repositories.
+  -h, --help          Show this help message and exit.
+  -v, --verbose       Writes all messages to console.
+  -u, --update        Checks server for an update, replaces the current
+                      version if there is a newer version available.
+  -V, --version       show program's version number and exit
+```
 
 ### Installation Instructions
 
