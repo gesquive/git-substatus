@@ -5,7 +5,7 @@
 Git utility to show the status of all subfolder git repositories
 """
 from __future__ import print_function
-__version__ = "1.2"
+__version__ = "1.3"
 
 import getopt
 import sys
@@ -32,21 +32,7 @@ script_url = 'https://raw.github.com/gesquive/git-substatus/master/git-substatus
 verbose = False
 debug = False
 
-#TODO: Add auto-detection of color tty
-#TODO: Add support for current directory
-
-class colors:
-    PRE = '\033[95m'
-    BLUE = '\033[94m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    END = '\033[0m'
-
-
-def main():
-    global verbose, debug
-
+def parse_args():
     parser = argparse.ArgumentParser(add_help=False,
         description="Git utility to show the status of all subfolder git repositories",
         epilog="%(__app__)s v%(__version__)s\n" % globals())
@@ -54,6 +40,10 @@ def main():
     group = parser.add_argument_group("Options")
     group.add_argument("-d", "--dir", default=".",
         help="The parent directory to the git repositories.")
+    group.add_argument("-a", "--list-all", action="store_true",
+        help="List all directories.")
+    group.add_argument("-n", "--list-others", action="store_true",
+        help="List only non-git directories.")
     group.add_argument("-R", "--reverse-sort", action="store_true",
         help="Reverse the order of the listed repositories.")
     group.add_argument("-h", "--help", action="help",
@@ -69,32 +59,46 @@ def main():
                     version="%(__app__)s v%(__version__)s" % globals())
 
     args = parser.parse_args()
+    return args
+
+
+def init_logging(verbose, debug):
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_formatter = logging.Formatter("")
+    console_handler.setFormatter(console_formatter)
+    logging.getLogger('').addHandler(console_handler)
+
+    if verbose or debug:
+        logging.getLogger('').setLevel(logging.DEBUG)
+        logging.debug("Verbose mode activated.")
+    else:
+        logging.getLogger('').setLevel(logging.INFO)
+
+
+def main():
+    global verbose, debug
+    args = parse_args()
+
     verbose = args.verbose
     debug = args.debug
 
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter("%(message)s",
-                                          "%Y-%m-%d %H:%M:%S")
-    console_handler.setFormatter(console_formatter)
-    logging.getLogger('').addHandler(console_handler)
-    if verbose:
-        logging.getLogger('').setLevel(logging.DEBUG)
-    else:
-        logging.getLogger('').setLevel(logging.INFO)
+    init_logging(verbose, debug)
 
     if args.update:
         update(script_url)
         sys.exit()
 
+    colors.init()
+
     try:
-        git_dirs = get_get_dirs(args.dir, args.reverse_sort)
-        if len(git_dirs) == 0:
-            logging.error("None of the subdirectories have git repositories.")
-        git_data = ["Scanning subdirectories of '{}'".format(os.path.abspath(args.dir))]
-        for git_dir in git_dirs:
-            git_status = get_repo_info(git_dir)
-            git_data.append(git_status)
-        output_to_pager(git_data)
+        dir_infos = get_dir_info(args.dir, args.reverse_sort)
+        output = ['Status of "{}"'.format(os.path.abspath(args.dir))]
+        for dir_info in dir_infos:
+            if args.list_all or\
+               (args.list_others and not dir_info['is_git_repo']) or\
+               (not args.list_others and dir_info['is_git_repo']):
+                output.append(get_pretty_out(dir_info))
+        output_to_pager(output)
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception:
@@ -102,54 +106,73 @@ def main():
 
 
 from glob import glob
+def get_dir_info(parent_dir, reverse=False):
+    dir_info = []
+    if os.path.exists(os.path.join(parent_dir, '.git')):
+        dir_info.append(get_git_info(parent_dir))
+    else:
+        for sub_dir in glob(os.path.join(parent_dir, '*')):
+            if os.path.isdir(sub_dir):
+                dir_info.append(get_git_info(sub_dir))
+    dir_info.sort(key=lambda d: d['name'].lower(), reverse=reverse)
+    return dir_info
 
 
-def get_get_dirs(parent_dir, reverse=False):
-    git_dirs = []
-    for sub_file in glob(os.path.join(parent_dir, '*')):
-        if os.path.exists(os.path.join(sub_file, ".git")):
-            git_dirs.append(sub_file)
-    return sorted(git_dirs, reverse=reverse,
-        key=lambda s: s.lower())
+def get_git_info(dir_path):
+    dir_info = {}
+    dir_info['name'] = os.path.basename(os.path.abspath(dir_path))
+    is_git_repo = os.path.exists(os.path.join(dir_path, '.git'))
+    dir_info['is_git_repo'] = is_git_repo
 
+    branch_regex = re.compile(r'.*On branch (?P<branch>.*)')
+    if is_git_repo:
+        git_status = sh('git status', cwd=dir_path)
+        results = re.match(branch_regex, git_status)
+        if results:
+            (branch_name,) = results.groups(0)
+            dir_info['branch_name'] = branch_name
+        else:
+            dir_info['branch_name'] = 'none'
 
-branch_regex = re.compile(r'.*On branch (?P<branch>.*)')
+        dir_info['has_changes'] = git_status.find('nothing to commit') == -1
+    return dir_info
 
+def get_pretty_out(dir_info, name_length=50):
+    if len(dir_info['name']) > name_length:
+        pretty_name = '{}...'.format(dir_info['name'][:name_length-3])
+    else:
+        pretty_name = dir_info['name']
+    if dir_info['is_git_repo']:
+        dir_color = colors.BLUE
+        branch_color = colors.PURPLE
+        if dir_info['branch_name'] == 'master':
+            branch_color = colors.GREEN
 
-def get_repo_info(git_dir):
-    saved_cwd = os.getcwd()
-    git_dir = os.path.abspath(git_dir)
-    os.chdir(git_dir)
-    status_out = popen("git status")
-
-    results = re.match(branch_regex, status_out)
-    if results:
-        (branch_name,) = results.groups(0)
-    branch_color = colors.YELLOW
-    if branch_name == "master":
-        branch_color = colors.GREEN
-
-    git_status = "changes"
-    status_color = colors.RED
-    if status_out.find('nothing to commit') != -1:
-        git_status = "no changes"
+        git_status = 'no changes'
         status_color = colors.GREEN
+        if dir_info['has_changes']:
+            git_status = 'changes'
+            status_color = colors.RED
+        branch_name = dir_info['branch_name']
+    else:
+        dir_color = colors.GREY
+        branch_color = colors.YELLOW
+        branch_name = 'no git'
+        status_color = colors.RED
+        git_status = ''
 
-    pretty_git_name = os.path.basename(git_dir)
-    if len(pretty_git_name) > 50:
-        pretty_git_name = "{}...".format(pretty_git_name[:47])
+    name_spacing = '-' * ((name_length+14)-(len(pretty_name)+len(branch_name)))
 
-    status_line = "{}{:<50}{} {}{:>14}{} : {}{:<10}{}".format(
-        colors.BLUE, pretty_git_name, colors.END,
-        branch_color, branch_name, colors.END,
-        status_color, git_status, colors.END)
-
-    os.chdir(saved_cwd)
+    status_line = '{}{}{} {}{}{} {}{}{} : {}{:<10}{}'.format(
+        dir_color, pretty_name, colors.RESET,
+        colors.GREY, name_spacing, colors.RESET,
+        branch_color, branch_name, colors.RESET,
+        status_color, git_status, colors.RESET)
 
     return status_line
 
 
-def popen(command, cwd=None, seperate=True):
+def sh(command, cwd=None, seperate=True):
     """
     Returns the stdout from the given command, using the subprocess
     command.
@@ -316,6 +339,61 @@ Compares two version number strings
     logging.info("New version installed as {}".format(app_path))
     logging.info("(previous version backed up to {})".format(backup_path))
     return
+
+
+class colors:
+    BLACK = ''
+    RED = ''
+    GREEN = ''
+    YELLOW = ''
+    BLUE = ''
+    PURPLE = ''
+    CYAN = ''
+    WHITE = ''
+    GREY = ''
+    END = ''
+
+    @staticmethod
+    def init():
+        if colors.supports_color():
+            colors.BLACK = '\033[30m'
+            colors.RED = '\033[31m'
+            colors.GREEN = '\033[32m'
+            colors.YELLOW = '\033[33m'
+            colors.BLUE = '\033[34m'
+            colors.PURPLE = '\033[35m'
+            colors.CYAN = '\033[36m'
+            colors.WHITE = '\033[1;37m'
+            colors.GREY = '\033[0;37m'
+            colors.RESET = '\033[0m'
+
+    @staticmethod
+    def blue(msg):
+        return '{}{}{}'.format(colors.BLUE, msg, colors.RESET)
+    @staticmethod
+    def green(msg):
+        return '{}{}{}'.format(colors.GREEN, msg, colors.RESET)
+    @staticmethod
+    def yellow(msg):
+        return '{}{}{}'.format(colors.YELLOW, msg, colors.RESET)
+    @staticmethod
+    def red(msg):
+        return '{}{}{}'.format(colors.RED, msg, colors.RESET)
+
+    @staticmethod
+    def supports_color():
+        """
+        Returns True if the running system's terminal supports color, and False
+        otherwise.
+        """
+        plat = sys.platform
+        supported_platform = plat != 'Pocket PC' and (plat != 'win32' or
+                                                      'ANSICON' in os.environ)
+        # isatty is not always implemented, #6223.
+        is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+        if not supported_platform or not is_a_tty:
+            return False
+        return True
 
 
 if __name__ == '__main__':
