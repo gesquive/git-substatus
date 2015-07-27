@@ -126,7 +126,7 @@ def get_git_info(dir_path):
 
     branch_regex = re.compile(r'.*On branch (?P<branch>.*)')
     if is_git_repo:
-        git_status = sh('git status', cwd=dir_path)
+        git_status = sh('git status', cwd=dir_path).decode()
         results = re.match(branch_regex, git_status)
         if results:
             (branch_name,) = results.groups(0)
@@ -191,7 +191,7 @@ def output_to_pager(text):
                                  stdin=subprocess.PIPE,
                                  stdout=sys.stdout)
         for line in text:
-            pager.stdin.write("{}{}".format(line, os.linesep))
+            pager.stdin.write("{}{}".format(line, os.linesep).encode())
         pager.stdin.close()
         pager.wait()
     except KeyboardInterrupt:
@@ -334,7 +334,7 @@ Compares two version number strings
         shutil.copymode(backup_path, app_path)
     except:
         pass
-        os.chmod(app_path, 0755)
+        os.chmod(app_path, 0o755)
 
     logging.info("New version installed as {}".format(app_path))
     logging.info("(previous version backed up to {})".format(backup_path))
